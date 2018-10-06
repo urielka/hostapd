@@ -16,23 +16,6 @@
 [[ $ARCHITECTURE == "" ]] && ARCHITECTURE=$(dpkg --print-architecture)
 [[ $SRC == "" ]] && SRC=$(pwd)
 
-#--------------------------------------------------------------------------------------------------------------------------------
-# Set prerequisities and cleanup
-#--------------------------------------------------------------------------------------------------------------------------------
-
-CPUS=$(grep -c 'processor' /proc/cpuinfo)
-CTHREADS="-j$(($CPUS + $CPUS/2))";
-rm -f build.log hostapd-custom*.deb
-
-
-#--------------------------------------------------------------------------------------------------------------------------------
-# Download some dependencies
-#--------------------------------------------------------------------------------------------------------------------------------
-echo -e "[\e[0;32m o.k. \x1B[0m] Building hostapd$TARGET"
-echo -e "[\e[0;32m o.k. \x1B[0m] Downloading dependencies."
-apt-get -qq -y install build-essential pkg-config libnl-3-dev libssl-dev libnl-genl-3-dev patchutils libnl*
-
-
 download ()
 {
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -55,7 +38,7 @@ checkout ()
 #--------------------------------------------------------------------------------------------------------------------------------
 if [ "$1" == "stable" ]; then
 	cd $SRC/hostap
-	git checkout -f -q "hostap_2_5" >> ../build.log 2>&1
+	git checkout -f -q "1dd66fc10" >> ../build.log 2>&1
 	else
 	git checkout -f -q >> ../build.log 2>&1
 fi
@@ -74,12 +57,6 @@ if [ $? -ne 0 ] || [ ! -f $SRC/hostap/hostapd/hostapd ]; then
         exit 1
 fi
 }
-
-# download inside chroot fails
-if [ "$(stat -c %d:%i /)" == "$(stat -c %d:%i /proc/1/root/.)" ]; then
-download
-checkout "stable"
-fi
 
 packing ()
 {
@@ -116,6 +93,29 @@ echo -e "[\e[0;32m o.k. \x1B[0m] All done. Hostapd is packed into: hostapd-custo
 }
 
 
+#--------------------------------------------------------------------------------------------------------------------------------
+# Set prerequisities and cleanup
+#--------------------------------------------------------------------------------------------------------------------------------
+
+CPUS=$(grep -c 'processor' /proc/cpuinfo)
+CTHREADS="-j$(($CPUS + $CPUS/2))";
+rm -f build.log hostapd-custom*.deb
+
+
+#--------------------------------------------------------------------------------------------------------------------------------
+# Download some dependencies
+#--------------------------------------------------------------------------------------------------------------------------------
+echo -e "[\e[0;32m o.k. \x1B[0m] Building hostapd$TARGET"
+echo -e "[\e[0;32m o.k. \x1B[0m] Downloading dependencies."
+apt-get -qq -y install build-essential pkg-config libnl-3-dev libssl-dev libnl-genl-3-dev patchutils libnl*
+
+
+# download inside chroot fails
+if [ "$(stat -c %d:%i /)" == "$(stat -c %d:%i /proc/1/root/.)" ]; then
+  download
+  checkout "stable"
+fi
+
 
 #--------------------------------------------------------------------------------------------------------------------------------
 # Copy Driver interface for rtl871x driver
@@ -128,16 +128,7 @@ for i in $SRC/patch/*.patch; do
 	patch -p1 -s --batch < $i
 	if [ $? -ne 0 ]; then echo -e "[\e[0;31m err. \x1B[0m] hostapd not built."; exit 1; fi
 done
-cp $SRC/config/config_realtek $SRC/hostap/hostapd/.config
+cp $SRC/config/config_default $SRC/hostap/hostapd/.config
 cd hostapd
 compiling
 packing
-checkout "stable"
-cd $SRC/hostap/
-rm -f src/drivers/driver_rtl.h src/drivers/driver_rtw.c
-patch --batch -f -p1 < $SRC/patch/realtek/rtlxdrv.patch >> ../build.log 2>&1
-cp $SRC/config/config_realtek $SRC/hostap/hostapd/.config
-cp $SRC/files/*.* $SRC/hostap/src/drivers/
-cd hostapd
-compiling " realtek"
-packing "-realtek"
